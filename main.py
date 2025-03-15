@@ -112,7 +112,7 @@ class Upload_Logic():
                 url = f"{self.WEBHOOK_URL}/messages/{each}"
                 response = requests.delete(url, proxies=self.PROXIES)
                 if response.status_code == 204:
-                    print(f"\r Deleted {each} via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}) : ({(countr//total_ids)*100:.2f}%)", end='           ')
+                    print(f"\r Deleted {each} via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}) : ({(countr/total_ids)*100:.2f}%)", end='           ')
                 else:
                     print(f"\n Failed to delete message ID {each}. Status code: {response.status_code}")
             print("\n")
@@ -124,9 +124,3 @@ class Upload_Logic():
 
 
     
-u = Upload_Logic()
-id = u.send_file("Hello world", "WOW", "txt")
-print(id)
-rt = u.retrieve_id(id, "WOW")
-print(rt)
-u.delete_id(id)
