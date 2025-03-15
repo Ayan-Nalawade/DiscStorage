@@ -1,10 +1,7 @@
-import requests, json
-import time, os
-
+import requests
 import base64
 import hashlib
 from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
 
 CHANNEL_ID = 1350240209291317440
 BOT_NAME = "MyDataBot"
@@ -119,8 +116,16 @@ class Upload_Logic():
 
 
 
+class LocalHandler():
+    def __init__(self):
+        pass
 
+    def load_file(self, filepath: str) -> str: 
+        with open(filepath, "rb") as f:
+            data = f.read()
+        return base64.b85encode(data).decode('utf-8')
+            
+    def save_file(self, filepath: str, data: str) -> int: # File path must have extension (.txt or similar) already inputted
+        with open(filepath, "wb") as f:
+            return f.write(base64.b85decode(data.encode('utf-8')))
 
-
-
-    
