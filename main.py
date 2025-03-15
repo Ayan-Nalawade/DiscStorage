@@ -1,10 +1,7 @@
-import requests, json
-import time, os
-
+import requests
 import base64
 import hashlib
 from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
 
 CHANNEL_ID = 1350240209291317440
 BOT_NAME = "MyDataBot"
@@ -112,21 +109,23 @@ class Upload_Logic():
                 url = f"{self.WEBHOOK_URL}/messages/{each}"
                 response = requests.delete(url, proxies=self.PROXIES)
                 if response.status_code == 204:
-                    print(f"\r Deleted {each} via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}) : ({(countr//total_ids)*100:.2f}%)", end='           ')
+                    print(f"\r Deleted {each} via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}) : ({(countr/total_ids)*100:.2f}%)", end='           ')
                 else:
                     print(f"\n Failed to delete message ID {each}. Status code: {response.status_code}")
             print("\n")
 
 
 
+class LocalHandler():
+    def __init__(self):
+        pass
 
+    def load_file(self, filepath: str) -> str: 
+        with open(filepath, "rb") as f:
+            data = f.read()
+        return base64.b85encode(data).decode('utf-8')
+            
+    def save_file(self, filepath: str, data: str) -> int: # File path must have extension (.txt or similar) already inputted
+        with open(filepath, "wb") as f:
+            return f.write(base64.b85decode(data.encode('utf-8')))
 
-
-
-    
-u = Upload_Logic()
-id = u.send_file("Hello world", "WOW", "txt")
-print(id)
-rt = u.retrieve_id(id, "WOW")
-print(rt)
-u.delete_id(id)
