@@ -1,11 +1,11 @@
 import requests
-import base64
-import hashlib
+import base64, hashlib
+import os
 from Crypto.Cipher import AES
 
 CHANNEL_ID = 1350240209291317440
 BOT_NAME = "MyDataBot"
-
+COMMON_ERROR = "NOO"
 
 class Encryption():
     def __init__(self):
@@ -32,7 +32,7 @@ class Encryption():
 
 class Upload_Logic():
     def __init__(self):
-        self.CHARACTER_LIMIT = 2000 #2000
+        self.CHARACTER_LIMIT = 7340032 #2000
         self.WEBHOOK_URL = "https://discord.com/api/webhooks/1350242637055000657/hebJBBZakZJak3Ui9OOl7kxctz_RFKRXpm9pcz2d3eWqso5uEmSx5Gm0aEQBB_tAu1NM"
         self.WEBHOOK_URL_AWAIT = self.WEBHOOK_URL + "?wait=true"
         self.PROXIES = {
@@ -121,11 +121,71 @@ class LocalHandler():
         pass
 
     def load_file(self, filepath: str) -> str: 
-        with open(filepath, "rb") as f:
-            data = f.read()
-        return base64.b85encode(data).decode('utf-8')
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+            return base64.b85encode(data).decode('utf-8')
+        except FileNotFoundError:
+            print("Invalid File")
+            return COMMON_ERROR
             
     def save_file(self, filepath: str, data: str) -> int: # File path must have extension (.txt or similar) already inputted
         with open(filepath, "wb") as f:
             return f.write(base64.b85decode(data.encode('utf-8')))
 
+if __name__ == "__main__":
+    ul = Upload_Logic()
+    lh = LocalHandler()
+    e = Encryption()
+    while True:
+        x = input(">>> ")
+        if x == "exit":
+            print("Good bye")
+            break
+        elif x == "help":
+            print("Commands: \n 1. upload \n 2. retrieve \n 3. delete 4. exit")
+        elif x.lower() == "upload":
+            file = input("Enter filename: ")
+            print("MAKE SURE TO ENTER A PASSWORD YOU WILL REMEMBER...If you forget it, you will not be able to retrieve the data")
+            password = input("Enter password: ")
+            _, path = file.split(".")
+            data = lh.load_file(file)
+            if data == COMMON_ERROR:
+                continue
+            message_id = ul.send_file(data, password, path)
+            for each in message_id:
+                with open("out.rt", "w") as f:
+                    f.write(f"{each}\n")
+        elif x.lower() == "retrieve":
+            file = input("Enter rt file: ")
+            try:
+                with open(file, "r") as f:
+                    message_id:list = f.read().split("\n")[:-1]
+            except FileNotFoundError:
+                print("Invalid File")
+                continue
+            print("MAKE SURE TO ENTER THE SAME PASSWORD YOU USED TO UPLOAD THE FILE")
+            password = input("Enter password: ")
+            result = ul.retrieve_id(message_id, password)
+            if result is None:
+                print("Failed to retrieve data.")
+                continue
+            data, path = result
+            try:
+                data = base64.b85decode(data.encode('utf-8'))
+            except ValueError as e:
+                print(f"Failed to decode data: {e}")
+                continue
+            if data:
+                with open(f"retrieved.{path}", "wb") as f:
+                    f.write(data)
+        elif x.lower() == "delete":
+            file = input("Enter rt file: ")
+            try:
+                with open(file, "r") as f:
+                    message_id:list = f.read().split("\n")[:-1]
+            except FileNotFoundError:
+                print("Invalid File")
+                continue
+            ul.delete_id(message_id)
+            os.remove(file)
