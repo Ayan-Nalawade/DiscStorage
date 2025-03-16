@@ -18,6 +18,17 @@ A simple tool to store images on Discord.
    ```bash
    pip install -r requirements.txt
    ```
+4. Install docker and TOR:
+   ```bash
+   sudo apt update
+   sudo apt install docker.io -y
+   sudo docker run --name='tor-privoxy' -d \
+     -p 9050:9050 \
+     -p 9051:9051 \
+     -p 8118:8118 \
+   dockage/tor-privoxy:latest
+   ```
+   # Alternatively, get rid of the proxy commands in requests. HOWEVER this may cause issues with Discord
 
 
 ## Project Goals
@@ -25,7 +36,6 @@ A simple tool to store images on Discord.
 - Improve the overall user experience.
 - Add support for Windows file system to directly add files.
 ```
-
 
 
 ### Screenshots to create a discord webhook and copy channel ID
