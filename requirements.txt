@@ -1,2 +1,2 @@
-hashlib
 requests
+pycryptodome
