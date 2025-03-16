@@ -1,13 +1,14 @@
 import requests
 import base64, hashlib
 import os
+import json
 from Crypto.Cipher import AES
 
-CHANNEL_ID = 1350240209291317440
+CHANNEL_ID = <CHANGE ME>
 BOT_NAME = "MyDataBot"
 COMMON_ERROR = "NOO"
 
-class Encryption():
+class Encryption:
     def __init__(self):
         pass 
 
@@ -20,70 +21,71 @@ class Encryption():
         key_bytes = self.derive_key(key)
         cipher = AES.new(key_bytes, AES.MODE_GCM)
         ciphertext, tag = cipher.encrypt_and_digest(data)
+        # Return base85-encoded ciphertext (including nonce and tag)
         return base64.b85encode(cipher.nonce + tag + ciphertext)
 
     def decrypt(self, encrypted_data: bytes, key: str) -> bytes:
         """Decrypts the given encrypted data using AES-256-GCM with the provided key."""
         key_bytes = self.derive_key(key)
-        encrypted_data = base64.b85decode(encrypted_data)
-        nonce, tag, ciphertext = encrypted_data[:16], encrypted_data[16:32], encrypted_data[32:]
+        decoded = base64.b85decode(encrypted_data)
+        nonce, tag, ciphertext = decoded[:16], decoded[16:32], decoded[32:]
         cipher = AES.new(key_bytes, AES.MODE_GCM, nonce=nonce)
         return cipher.decrypt_and_verify(ciphertext, tag)
 
-class Upload_Logic():
+class Upload_Logic:
     def __init__(self):
-        self.CHARACTER_LIMIT = 7340032 #2000
-        self.WEBHOOK_URL = "https://discord.com/api/webhooks/1350242637055000657/hebJBBZakZJak3Ui9OOl7kxctz_RFKRXpm9pcz2d3eWqso5uEmSx5Gm0aEQBB_tAu1NM"
+        # CHARACTER_LIMIT is set to a multiple of 5 to ensure valid base85 blocks.
+        self.CHARACTER_LIMIT = 7340032
+        self.CHARACTER_LIMIT -= self.CHARACTER_LIMIT % 5
+        self.WEBHOOK_URL = "<CHANGE ME>"
         self.WEBHOOK_URL_AWAIT = self.WEBHOOK_URL + "?wait=true"
         self.PROXIES = {
-                "http": "http://localhost:8118",
-                "https": "http://localhost:8118",
-            }
-        self.NULLCHAR = "⠀"
+            "http": "http://localhost:8118",
+            "https": "http://localhost:8118",
+        }
 
-    
-    def split_into_chunk(self, text):
+    def split_into_chunks(self, text: str) -> list:
+        """Splits the text into chunks of a given limit (ensuring each chunk is a multiple of 5)."""
         limit = self.CHARACTER_LIMIT
-        chunks = []
-        while len(text) > limit:
-            # Find the best place to split (at the last space within the limit)
-            split_index = text[:limit].rfind(' ')
-            if split_index == -1:  # No space found, split at the limit
-                split_index = limit
-            chunks.append(text[:split_index])
-            text = text[split_index:].lstrip()  # Remove leading spaces in the remaining text
-        
-        if text:  # Add any remaining text
-            chunks.append(text)
-        
-        return chunks
-    
-    def send_file(self, text: str, password: str, filetype: str) -> list:
-        """Sends a file to the Discord channel using a webhook and returns the message ID. THE TEXT HAS FILE TYPE ADDED"""
-        
-        chunk: list = self.split_into_chunk(text)
-        countr: int = 0
-        return_list:list = []
-        call = Encryption()
+        return [text[i:i+limit] for i in range(0, len(text), limit)]
 
-        for each in chunk:
-            each = f"{call.encrypt(f"{each}{self.NULLCHAR}{filetype}".encode('utf-8'), password).decode('utf-8')}"
-            countr += 1
-            print(f"\r Upload progress via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}): ({(countr*100//len(chunk))}%)", end='           ')
-            post = requests.post(self.WEBHOOK_URL_AWAIT, proxies=self.PROXIES, files={'file': ('message.txt', each.encode('utf-8') )})
+    def send_file(self, payload: str, password: str) -> list:
+        """
+        Sends the encrypted payload (a base85-encoded string) to the Discord channel using a webhook.
+        Returns a list of message IDs.
+        """
+        chunks = self.split_into_chunks(payload)
+        total_chunks = len(chunks)
+        message_ids = []
+        encryption_instance = Encryption()
+
+        for idx, chunk in enumerate(chunks, start=1):
+            chunk_bytes = chunk.encode('utf-8')
+            try:
+                ip = requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()
+            except Exception as e:
+                ip = "N/A"
+            print(f"\r Upload progress via route ({ip}): ({(idx*100)//total_chunks}%)", end='           ')
+            post = requests.post(self.WEBHOOK_URL_AWAIT, proxies=self.PROXIES,
+                                 files={'file': ('message.txt', chunk_bytes)})
             if post.status_code == 200:
                 message = post.json()
-                return_list.append(message["id"]) 
-        
+                message_ids.append(message["id"])
+            else:
+                print(f"\nFailed to send chunk {idx}. Status code: {post.status_code}")
         print("\n")
+        return message_ids
 
-        return return_list
-    
-    def retrieve_id(self, message_id: list, password: str) -> tuple: # Tuple with decrypted data AND filetype
-        """Retrieves the file based on the message IDs and decrypts the data."""
-        call = Encryption()
-        for each in message_id:
-            url = f"{self.WEBHOOK_URL}/messages/{each}"
+    def retrieve_file(self, message_ids: list, password: str) -> str:
+        """
+        Retrieves all chunks using the message IDs, concatenates them,
+        and returns the decrypted payload (JSON string) that contains file data.
+        """
+        encryption_instance = Encryption()
+        all_chunks = ""
+        countr = 0
+        for mid in message_ids:
+            url = f"{self.WEBHOOK_URL}/messages/{mid}"
             response = requests.get(url, proxies=self.PROXIES)
             if response.status_code == 200:
                 msg = response.json()
@@ -91,101 +93,135 @@ class Upload_Logic():
                 if attachments:
                     attachment = attachments[0]
                     attachment_url = attachment["url"]
-                    file_response = requests.get(attachment_url)
+                    file_response = requests.get(attachment_url, proxies=self.PROXIES)
                     if file_response.status_code == 200:
-                        return call.decrypt(file_response.content, password).decode('utf-8').split(self.NULLCHAR)
+                        chunk_data = file_response.content.decode('utf-8')
+                        all_chunks += chunk_data
                     else:
                         print(f"Failed to download file from {attachment_url}. Status code: {file_response.status_code}")
                 else:
-                    print(f"No attachments found in message ID {each}.")
+                    print(f"No attachments found in message ID {mid}.")
+            else:
+                print(f"Failed to retrieve message ID {mid}. Status code: {response.status_code}")
 
+        # Decrypt the concatenated payload
+        try:
+            decrypted_bytes = encryption_instance.decrypt(all_chunks.encode('utf-8'), password)
+            return decrypted_bytes.decode('utf-8')
+        except Exception as e:
+            print(f"Decryption failed: {e}")
+            return None
 
-    def delete_id(self, message_id: list) -> None:
-            """ Deletes the message based on the message IDs."""
-            countr: int = 0
-            total_ids = len(message_id)
-            for each in message_id:
-                countr += 1
-                url = f"{self.WEBHOOK_URL}/messages/{each}"
-                response = requests.delete(url, proxies=self.PROXIES)
-                if response.status_code == 204:
-                    print(f"\r Deleted {each} via route ({requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()}) : ({(countr/total_ids)*100:.2f}%)", end='           ')
-                else:
-                    print(f"\n Failed to delete message ID {each}. Status code: {response.status_code}")
-            print("\n")
+    def delete_ids(self, message_ids: list) -> None:
+        """Deletes the messages corresponding to the given message IDs."""
+        total_ids = len(message_ids)
+        for count, mid in enumerate(message_ids, start=1):
+            url = f"{self.WEBHOOK_URL}/messages/{mid}"
+            response = requests.delete(url, proxies=self.PROXIES)
+            try:
+                ip = requests.get('https://api64.ipify.org', proxies=self.PROXIES, timeout=30).text.strip()
+            except Exception as e:
+                ip = "N/A"
+            if response.status_code == 204:
+                print(f"\r Deleted {mid} via route ({ip}) : ({(count/total_ids)*100:.2f}%)", end='           ')
+            else:
+                print(f"\nFailed to delete message ID {mid}. Status code: {response.status_code}")
+        print("\n")
 
-
-
-class LocalHandler():
+class LocalHandler:
     def __init__(self):
         pass
 
-    def load_file(self, filepath: str) -> str: 
+    def load_file(self, filepath: str) -> bytes:
+        """Reads the file and returns its raw bytes."""
         try:
             with open(filepath, "rb") as f:
                 data = f.read()
-            return base64.b85encode(data).decode('utf-8')
+            return data
         except FileNotFoundError:
             print("Invalid File")
-            return COMMON_ERROR
-            
-    def save_file(self, filepath: str, data: str) -> int: # File path must have extension (.txt or similar) already inputted
+            return None
+
+    def save_file(self, filepath: str, data: bytes) -> int:
+        """Saves the raw bytes data to the file."""
         with open(filepath, "wb") as f:
-            return f.write(base64.b85decode(data.encode('utf-8')))
+            return f.write(data)
 
 if __name__ == "__main__":
     ul = Upload_Logic()
     lh = LocalHandler()
-    e = Encryption()
+    encryption_instance = Encryption()
+
     while True:
-        x = input(">>> ")
-        if x == "exit":
+        command = input(">>> ").strip().lower()
+        if command == "exit":
             print("Good bye")
             break
-        elif x == "help":
-            print("Commands: \n 1. upload \n 2. retrieve \n 3. delete 4. exit")
-        elif x.lower() == "upload":
-            file = input("Enter filename: ")
-            print("MAKE SURE TO ENTER A PASSWORD YOU WILL REMEMBER...If you forget it, you will not be able to retrieve the data")
-            password = input("Enter password: ")
-            _, path = file.split(".")
-            data = lh.load_file(file)
-            if data == COMMON_ERROR:
+        elif command == "help":
+            print("Commands: \n 1. upload \n 2. retrieve \n 3. delete \n 4. exit")
+        elif command == "upload":
+            filename = input("Enter filename: ").strip()
+            file_data = lh.load_file(filename)
+            if file_data is None:
                 continue
-            message_id = ul.send_file(data, password, path)
-            for each in message_id:
-                with open("out.rt", "w") as f:
-                    f.write(f"{each}\n")
-        elif x.lower() == "retrieve":
-            file = input("Enter rt file: ")
+            # Extract file extension (default to "dat" if none found)
+            if "." in filename:
+                _, file_ext = filename.rsplit(".", 1)
+            else:
+                file_ext = "dat"
+            print("MAKE SURE TO ENTER A PASSWORD YOU WILL REMEMBER...If you forget it, you will not be able to retrieve the data")
+            password = input("Enter password: ").strip()
+            # Prepare payload: a JSON object with the file extension and base85-encoded file data
+            payload_dict = {
+                "ext": file_ext,
+                "data": base64.b85encode(file_data).decode('utf-8')
+            }
+            payload_json = json.dumps(payload_dict)
+            payload_bytes = payload_json.encode('utf-8')
+            # Encrypt the payload
+            encrypted_payload = encryption_instance.encrypt(payload_bytes, password).decode('utf-8')
+            # Send the encrypted payload (split into safe chunks)
+            message_ids = ul.send_file(encrypted_payload, password)
+            # Save all message IDs into the runtime file (rt)
+            with open("out.rt", "w") as f:
+                for mid in message_ids:
+                    f.write(f"{mid}\n")
+            print("Upload complete. Message IDs saved to out.rt")
+        elif command == "retrieve":
+            rt_file = input("Enter rt file: ").strip()
             try:
-                with open(file, "r") as f:
-                    message_id:list = f.read().split("\n")[:-1]
+                with open(rt_file, "r") as f:
+                    message_ids = [line.strip() for line in f if line.strip()]
             except FileNotFoundError:
-                print("Invalid File")
+                print("Invalid RT file")
                 continue
             print("MAKE SURE TO ENTER THE SAME PASSWORD YOU USED TO UPLOAD THE FILE")
-            password = input("Enter password: ")
-            result = ul.retrieve_id(message_id, password)
-            if result is None:
+            password = input("Enter password: ").strip()
+            decrypted_payload = ul.retrieve_file(message_ids, password)
+            if decrypted_payload is None:
                 print("Failed to retrieve data.")
                 continue
-            data, path = result
             try:
-                data = base64.b85decode(data.encode('utf-8'))
-            except ValueError as e:
-                print(f"Failed to decode data: {e}")
+                payload_dict = json.loads(decrypted_payload)
+                file_ext = payload_dict.get("ext", "dat")
+                file_b85_data = payload_dict.get("data", "")
+                original_file_bytes = base64.b85decode(file_b85_data.encode('utf-8'))
+            except Exception as e:
+                print(f"Failed to parse decrypted data: {e}")
                 continue
-            if data:
-                with open(f"retrieved.{path}", "wb") as f:
-                    f.write(data)
-        elif x.lower() == "delete":
-            file = input("Enter rt file: ")
+            output_filename = f"retrieved.{file_ext}"
+            lh.save_file(output_filename, original_file_bytes)
+            print(f"File retrieved and saved as {output_filename}")
+        elif command == "delete":
+            rt_file = input("Enter rt file: ").strip()
             try:
-                with open(file, "r") as f:
-                    message_id:list = f.read().split("\n")[:-1]
+                with open(rt_file, "r") as f:
+                    message_ids = [line.strip() for line in f if line.strip()]
             except FileNotFoundError:
-                print("Invalid File")
+                print("Invalid RT file")
                 continue
-            ul.delete_id(message_id)
-            os.remove(file)
+            ul.delete_ids(message_ids)
+            os.remove(rt_file)
+            print("RT file deleted.")
+        else:
+            print("Unknown command. Type 'help' for commands.")
