@@ -1,6 +1,7 @@
 ```
 # DiscStorage
 A simple tool to store images on Discord.
+```
 
 ## Setup Instructions
 
