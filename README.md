@@ -29,7 +29,7 @@ A simple tool to store images on Discord.
    dockage/tor-privoxy:latest
    ```
    # Alternatively, get rid of the proxy commands in requests. HOWEVER this may cause issues with Discord
-   # On Windows, read this https://docs.docker.com/desktop/setup/install/windows-install/
+   *On Windows, read this https://docs.docker.com/desktop/setup/install/windows-install/
 
 
 ## Project Goals
